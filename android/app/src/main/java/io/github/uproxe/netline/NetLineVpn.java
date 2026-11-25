@@ -178,6 +178,9 @@ public final class NetLineVpn extends VpnService {
         out.write(yml.getBytes(java.nio.charset.StandardCharsets.UTF_8));
       }
       if (!TunNative.TProxyStartService(conf.getAbsolutePath(), tun.getFd())) throw new Exception("Не удалось запустить туннель");
+      // туннель читает настройки в своём потоке: если что-то не так, он сразу завершится
+      Thread.sleep(300);
+      if (!TunNative.TProxyIsRunning()) throw new Exception("Туннель VPN остановился сразу после запуска");
       current = p;
       running = true;
       since = System.currentTimeMillis();

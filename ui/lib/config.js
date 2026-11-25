@@ -275,7 +275,7 @@
     if (inbounds.length) {
       rules.push({ action: 'sniff' });
       rules.push({ protocol: 'dns', action: 'hijack-dns' });
-      if (o.mode === 'android') rules.push({ ip_cidr: ['172.19.0.2/32'], action: 'hijack-dns' });
+      if (o.mode === 'android') rules.push({ ip_cidr: ['172.19.0.2/32'], port: [53], action: 'hijack-dns' });
       rules.push({ ip_is_private: true, outbound: 'direct' });
       if (o.mode === 'tun') rules.push({ process_name: CORE_NAMES, outbound: 'direct' });
       if (ru) {

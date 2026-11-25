@@ -199,10 +199,13 @@ jobs:
         run: |
           mkdir -p dist
           cp desktop/target/universal-apple-darwin/release/bundle/dmg/*.dmg "dist/NetLineVPN-${{ needs.test.outputs.version }}-macos-universal.dmg"
-          APP="$(ls -d desktop/target/universal-apple-darwin/release/bundle/macos/*.app | head -1)"
-          ls -la "$APP/Contents/MacOS" "$APP/Contents/Resources"
+          hdiutil attach -nobrowse -readonly -mountpoint /tmp/nl dist/*.dmg >/dev/null
+          APP="/tmp/nl/NetLine VPN.app"
+          ls -la "$APP/Contents/MacOS" "$APP/Contents/Resources/rules"
           lipo -info "$APP/Contents/MacOS/netline-vpn" "$APP/Contents/MacOS/netline-singbox" "$APP/Contents/MacOS/netline-xray"
-          codesign -dv "$APP" 2>&1 | head -5 || true
+          codesign --verify --deep --strict "$APP" && echo "подпись (ad-hoc) в порядке"
+          "$APP/Contents/MacOS/netline-singbox" version | head -1
+          hdiutil detach /tmp/nl >/dev/null
           ls -la dist
       - uses: actions/upload-artifact@v6
         with:

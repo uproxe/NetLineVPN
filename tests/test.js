@@ -183,6 +183,9 @@ t('OpenVPN .ovpn', () => {
   assert.strictEqual(ep.type, 'openvpn-client');
   assert.deepStrictEqual(ep.servers, [{ server: 'vpn.example.com', server_port: 1194, network: 'udp' }, { server: '5.5.5.5', server_port: 443, network: 'tcp' }]);
   assert.deepStrictEqual([ep.username, ep.password, ep.auth], ['ivan', 'secret', 'SHA256']);
+  assert.strictEqual(ep.cipher, undefined);
+  assert.strictEqual(ep.data_ciphers_fallback, 'AES-256-GCM');
+  assert.deepStrictEqual(ep.data_ciphers, ['AES-256-GCM', 'CHACHA20-POLY1305']);
   assert.strictEqual(ep.tls.control_wrap.type, 'tls_auth');
   assert.strictEqual(ep.tls.control_wrap.direction, 'client');
   assert.strictEqual(ep.tls.remote_certificate_tls, 'server');

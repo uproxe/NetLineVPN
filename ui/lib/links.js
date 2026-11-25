@@ -556,7 +556,8 @@
       servers: servers.map(function (s) { return clean({ server: s.host, server_port: s.port || port, network: net(s.proto) }); }),
       username: user || undefined,
       password: pass || undefined,
-      cipher: opt.cipher ? opt.cipher[0] : undefined,
+      // в режиме TLS «cipher» из .ovpn — это запасной шифр данных (как в OpenVPN 2.6)
+      data_ciphers_fallback: opt.cipher ? opt.cipher[0] : undefined,
       data_ciphers: opt['data-ciphers'] ? opt['data-ciphers'][0].split(':') : undefined,
       auth: opt.auth ? opt.auth[0] : undefined,
       tls: tls

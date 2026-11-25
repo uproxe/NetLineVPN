@@ -26,7 +26,7 @@ const LINKS = {
   'vless-xhttp-reality': `vless://${UUID}@1.2.3.4:443?type=xhttp&security=reality&pbk=${PBK}&sid=ab&sni=www.apple.com&path=%2Fx&mode=auto#XH`,
   'vless-xhttp-tls-extra': `vless://${UUID}@x.example.com:443?type=xhttp&security=tls&sni=x.example.com&path=%2Fapi&mode=packet-up&extra=${enc('{"xPaddingBytes":"100-1000","noGRPCHeader":true}')}#XE`,
   'vless-grpc-multi': `vless://${UUID}@m.example.com:443?type=grpc&serviceName=svc&mode=multi&security=tls&sni=m.example.com#GM`,
-  'vless-kcp': `vless://${UUID}@k.example.com:9000?type=kcp#KCP`,
+  'vmess-kcp': 'vmess://' + Buffer.from(JSON.stringify({ v: '2', ps: 'KCP', add: 'k.example.com', port: '9000', id: UUID, aid: '0', net: 'kcp', type: 'none' })).toString('base64'),
   'vmess-ws': 'vmess://' + Buffer.from(JSON.stringify({ v: '2', ps: 'VM', add: 'vm.example.com', port: '443', id: UUID, aid: '0', scy: 'auto', net: 'ws', host: 'vm.example.com', path: '/v', tls: 'tls', sni: 'vm.example.com' })).toString('base64'),
   'vmess-tcp-http': 'vmess://' + Buffer.from(JSON.stringify({ v: '2', ps: 'VH', add: 'vh.example.com', port: '80', id: UUID, aid: '0', net: 'tcp', type: 'http', host: 'bing.com', path: '/' })).toString('base64'),
   'trojan-tls': 'trojan://secret@t.example.com:443?sni=t.example.com#TR',

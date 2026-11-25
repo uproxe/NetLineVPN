@@ -1,6 +1,6 @@
 [package]
 name = "netline-vpn"
-version = "1.0.0"
+version = "1.0.1"
 description = "NetLine VPN — простой клиент VPN и прокси"
 authors = ["uproxe"]
 license = "MIT"

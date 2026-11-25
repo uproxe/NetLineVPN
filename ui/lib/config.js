@@ -13,7 +13,7 @@
 
   const TEST_URL = 'https://www.gstatic.com/generate_204';
   const PROXY_PORT = 10808;
-  const CORE_NAMES = ['netline-xray', 'netline-xray.exe', 'netline-singbox', 'netline-singbox.exe'];
+  const CORE_NAMES = ['netline-helper', 'netline-helper.exe', 'netline-core', 'netline-core.exe'];
   const RU_SUFFIX = ['.ru', '.su', '.xn--p1ai', '.xn--d1acj3b', '.xn--80asehdb', '.xn--80aswg', '.xn--c1avg', '.xn--80adxhks'];
 
   // uTLS sing-box понимает те же имена, что и Xray; неизвестное — как Chrome
@@ -204,7 +204,7 @@
    *   mode: 'tun' | 'proxy' | 'android' | 'test',
    *   os: 'windows' | 'macos' | 'linux' | 'android',
    *   ruDirect: bool, rulesDir: string|null,
-   *   ports: { clash, inbound, xray: [] }, secret, auth: { user, pass }
+   *   ports: { clash, inbound, check, xray: [] }, secret, auth: { user, pass }
    * }
    * @returns {{ singbox, xray, tags }}  tags: тег → номер сервера
    */
@@ -258,20 +258,29 @@
 
     const inbounds = [];
     if (o.mode === 'tun') {
+      // macOS: стек gvisor не открывает входящих портов — иначе брандмауэр спрашивает разрешение
       const tun = { type: 'tun', tag: 'tun-in', address: ['172.19.0.1/30', 'fdfe:dcba:9876::1/126'], mtu: 9000,
-        auto_route: true, strict_route: true, stack: 'mixed' };
+        auto_route: true, strict_route: true, stack: o.os === 'macos' ? 'gvisor' : 'mixed' };
       if (o.os === 'windows') tun.interface_name = 'NetLine VPN';
       if (o.os === 'linux') tun.interface_name = 'netline0';
       inbounds.push(tun);
     } else if (o.mode === 'proxy') {
+      // системный прокси Linux включает ядро; Windows и macOS — сама программа (и проверяет, что он включился)
       inbounds.push(clean({ type: 'mixed', tag: 'mixed-in', listen: '127.0.0.1', listen_port: o.ports.inbound || PROXY_PORT,
-        set_system_proxy: (o.os === 'macos' || o.os === 'linux') ? true : undefined }));
+        set_system_proxy: o.os === 'linux' ? true : undefined }));
     } else if (o.mode === 'android') {
       inbounds.push({ type: 'socks', tag: 'socks-in', listen: '127.0.0.1', listen_port: o.ports.inbound,
         users: [{ username: auth.user, password: auth.pass }] });
     }
 
+    // вход для проверки после подключения: запрос через него всегда идёт через сервер
+    if (o.ports.check && o.mode !== 'test') {
+      inbounds.push({ type: 'socks', tag: 'check-in', listen: '127.0.0.1', listen_port: o.ports.check,
+        users: [{ username: auth.user, password: auth.pass }] });
+    }
+
     const rules = [];
+    if (o.ports.check && o.mode !== 'test') rules.push({ inbound: ['check-in'], outbound: proxyTag });
     if (inbounds.length) {
       rules.push({ action: 'sniff' });
       rules.push({ protocol: 'dns', action: 'hijack-dns' });

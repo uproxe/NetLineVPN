@@ -12,7 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 
 /**
- * Одно ядро VPN (sing-box или Xray). Это обычные программы, они лежат в приложении как lib*.so
+ * Одно ядро VPN: основное («core», sing-box) или вспомогательное («helper», Xray). Это обычные программы, они лежат в приложении как lib*.so
  * (так Android разрешает их запускать). Настройки передаются через stdin — ключи серверов
  * не попадают на диск. Последние строки вывода хранятся для журнала и сообщений об ошибках.
  */
@@ -21,6 +21,7 @@ final class Core {
     void onExit(Core core);
   }
 
+  /** "core" или "helper" */
   final String name;
   private final Context context;
   private Process process;
@@ -35,17 +36,17 @@ final class Core {
 
   private File binary() {
     final String dir = context.getApplicationInfo().nativeLibraryDir;
-    return new File(dir, "sing-box".equals(name) ? "libsingbox.so" : "libxray.so");
+    return new File(dir, "core".equals(name) ? "libnlcore.so" : "libnlhelper.so");
   }
 
   synchronized void start(String config, File workDir) throws Exception {
     stop();
     stopping = false;
     final File exe = binary();
-    if (!exe.exists()) throw new Exception("В этой сборке нет ядра " + name);
+    if (!exe.exists()) throw new Exception("В этой сборке нет файла " + exe.getName());
     workDir.mkdirs();
     final ProcessBuilder pb =
-        "sing-box".equals(name)
+        "core".equals(name)
             ? new ProcessBuilder(exe.getAbsolutePath(), "run", "-c", "stdin", "-D", workDir.getAbsolutePath())
             : new ProcessBuilder(exe.getAbsolutePath(), "run", "-config", "stdin:");
     pb.directory(workDir);
@@ -110,7 +111,7 @@ final class Core {
       if (tcpPing("127.0.0.1", port, 300) >= 0) return;
       Thread.sleep(100);
     }
-    throw new Exception("Ядро " + name + " не ответило вовремя");
+    throw new Exception(title(name) + " не ответило вовремя");
   }
 
   synchronized void stop() {
@@ -136,6 +137,10 @@ final class Core {
     }
   }
 
+  static String title(String name) {
+    return "core".equals(name) ? "Ядро VPN" : "Вспомогательное ядро VPN";
+  }
+
   /** Понятная причина ошибки по выводу ядра */
   static String explain(String name, String log) {
     final String low = log.toLowerCase();
@@ -149,11 +154,11 @@ final class Core {
       final String[] lines = log.trim().split("\n");
       last = lines.length > 0 ? lines[lines.length - 1].trim() : "";
     }
-    if (last.isEmpty()) return "Ядро " + name + " неожиданно завершилось";
+    if (last.isEmpty()) return title(name) + " неожиданно завершилось";
     final int i = last.indexOf("] ");
     if (i >= 0 && i < 60) last = last.substring(i + 2);
     if (last.length() > 300) last = last.substring(0, 300);
-    return "Ошибка ядра " + name + ": " + last;
+    return "Ошибка ядра VPN: " + last;
   }
 
   static int freePort() throws Exception {

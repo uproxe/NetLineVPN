@@ -41,13 +41,14 @@
   function mock(cmd, a) {
     const ok = function (v) { return new Promise(function (r) { setTimeout(function () { r(v); }, 60); }); };
     switch (cmd) {
-      case 'platform': return ok({ os: /android/i.test(navigator.userAgent) ? 'android' : 'linux', version: '1.0.0', cores: { singbox: '1.14.4', xray: '26.11.9' }, rulesDir: '/rules', autostart: false });
+      case 'platform': return ok({ os: /android/i.test(navigator.userAgent) ? 'android' : 'linux', version: '1.0.1', rulesDir: '/rules', autostart: false });
       case 'load_state': return ok(M.state);
       case 'save_state': M.state = a.data; return ok(null);
       case 'free_ports': return ok(Array.from({ length: a.count }, function (_, i) { return 30000 + i; }));
       case 'connect':
         M.status = { state: 'connecting', since: 0, error: '', rx: 0, tx: 0 };
-        setTimeout(function () { M.status = { state: 'on', since: Date.now(), error: '', rx: 0, tx: 0 }; }, 900);
+        setTimeout(function () { M.status = { state: 'connecting', stage: 'check', since: 0, error: '', rx: 0, tx: 0 }; }, 500);
+        setTimeout(function () { M.status = { state: 'on', since: Date.now(), error: '', rx: 0, tx: 0, ip: '185.220.101.7', country: 'NL' }; }, 1400);
         return ok(null);
       case 'disconnect': M.status = { state: 'off', since: 0, error: '', rx: 0, tx: 0 }; return ok(null);
       case 'status':

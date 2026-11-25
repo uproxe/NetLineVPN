@@ -294,7 +294,7 @@ t('VPN (TUN) на Windows: автовыбор, российские сайты �
   const ut = s.outbounds.find((o) => o.type === 'urltest');
   assert.deepStrictEqual(ut.outbounds, ['n0', 'n1', 'n2']);
   assert.strictEqual(s.route.final, 'proxy');
-  assert.ok(s.route.rules.some((r) => r.process_name && r.process_name.includes('netline-xray.exe')));
+  assert.ok(s.route.rules.some((r) => r.process_name && r.process_name.includes('netline-helper.exe')));
   assert.strictEqual(s.route.rule_set[0].path, 'C:\\NetLine\\rules/geoip-ru.srs');
   assert.deepStrictEqual(s.dns.rules[0].domain, ['nl.example.com', 'hy.example.com']);
   assert.strictEqual(s.route.auto_detect_interface, true);
@@ -302,15 +302,29 @@ t('VPN (TUN) на Windows: автовыбор, российские сайты �
   assert.deepStrictEqual(b.tags, { n0: 0, n1: 1, n2: 2 });
 });
 
-t('Прокси на macOS и одиночный сервер', () => {
-  const b = C.build({ nodes: [comp(NODES[0])], auto: true, mode: 'proxy', os: 'macos', ruDirect: false, rulesDir: '/x',
+t('Прокси и одиночный сервер: системный прокси ставит ядро только на Linux', () => {
+  const b = C.build({ nodes: [comp(NODES[0])], auto: true, mode: 'proxy', os: 'linux', ruDirect: false, rulesDir: '/x',
     ports: { clash: 9090, inbound: 10808, xray: [] }, secret: 's', auth: { user: 'u', pass: 'p' } });
   assert.deepStrictEqual(b.singbox.inbounds, [{ type: 'mixed', tag: 'mixed-in', listen: '127.0.0.1', listen_port: 10808, set_system_proxy: true }]);
+  const m = C.build({ nodes: [comp(NODES[0])], mode: 'proxy', os: 'macos', ports: { clash: 1, inbound: 2 }, secret: 's', auth: {} });
+  assert.strictEqual(m.singbox.inbounds[0].set_system_proxy, undefined);
   assert.strictEqual(b.singbox.outbounds[0].tag, 'proxy');
   assert.strictEqual(b.singbox.route.rule_set, undefined);
   assert.strictEqual(b.xray, null);
   const w = C.build({ nodes: [comp(NODES[0])], mode: 'proxy', os: 'windows', ports: { clash: 1, inbound: 2 }, secret: 's', auth: {} });
   assert.strictEqual(w.singbox.inbounds[0].set_system_proxy, undefined);
+});
+
+t('Проверочный вход: с паролем и всегда через сервер, мимо правил', () => {
+  const b = C.build({ nodes: [comp(NODES[0])], mode: 'tun', os: 'macos', ruDirect: true, rulesDir: '/r',
+    ports: { clash: 1, check: 7777 }, secret: 's', auth: { user: 'u', pass: 'p' } });
+  const ci = b.singbox.inbounds.find((i) => i.tag === 'check-in');
+  assert.deepStrictEqual(ci, { type: 'socks', tag: 'check-in', listen: '127.0.0.1', listen_port: 7777, users: [{ username: 'u', password: 'p' }] });
+  assert.deepStrictEqual(b.singbox.route.rules[0], { inbound: ['check-in'], outbound: 'proxy' });
+  assert.strictEqual(b.singbox.inbounds[0].stack, 'gvisor');
+  const w = C.build({ nodes: [comp(NODES[0])], mode: 'tun', os: 'windows', ports: { clash: 1 }, secret: 's', auth: {} });
+  assert.strictEqual(w.singbox.inbounds[0].stack, 'mixed');
+  assert.ok(!w.singbox.inbounds.some((i) => i.tag === 'check-in'));
 });
 
 t('Android: SOCKS5 с паролем, без привязки к интерфейсу', () => {

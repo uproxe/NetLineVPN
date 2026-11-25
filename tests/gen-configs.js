@@ -82,12 +82,12 @@ function write(name, b) {
   count++;
 }
 
-const OS = { tun: 'windows', proxy: 'macos', android: 'android', test: 'linux' };
+const OS = { tun: 'macos', proxy: 'macos', android: 'android', test: 'linux' };
 Object.keys(nodes).forEach((k) => {
   ['tun', 'proxy', 'android'].forEach((mode) => {
     const list = [nodes[k]];
     write(k + '-' + mode, C.build({ nodes: list, mode, os: mode === 'tun' ? 'linux' : OS[mode], ruDirect: true, rulesDir,
-      ports: { clash: port++, inbound: port++, xray: ports(C.xrayCount(list)) }, secret: 's', auth }));
+      ports: { clash: port++, inbound: port++, check: port++, xray: ports(C.xrayCount(list)) }, secret: 's', auth }));
   });
 });
 // все сразу: автовыбор и проверка задержки

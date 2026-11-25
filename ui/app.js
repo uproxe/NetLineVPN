@@ -44,6 +44,25 @@
     openvpn: 'OVPN', openconnect: 'OC', shadowtls: 'STLS', shadowsocksr: 'SSR' };
   function badge(p) { return BADGE[p] || String(p || '?').toUpperCase().slice(0, 6); }
 
+  // Флаги — картинками (Twemoji): в Windows эмодзи-флаги не рисуются, а так везде одинаково
+  function flagImg(cc) {
+    cc = String(cc || '').toLowerCase();
+    return /^[a-z]{2}$/.test(cc) ? '<img class="flag" src="flags/' + cc + '.svg" alt="" onerror="this.remove()">' : '';
+  }
+  /** Название с флагами-эмодзи → безопасный HTML с картинками флагов */
+  function nameHtml(name) {
+    return esc(name).replace(/(\uD83C[\uDDE6-\uDDFF])(\uD83C[\uDDE6-\uDDFF])/g, function (m, a, b) {
+      return flagImg(String.fromCharCode(a.charCodeAt(1) - 0xDDE6 + 97, b.charCodeAt(1) - 0xDDE6 + 97));
+    });
+  }
+  let regionNames = null;
+  function countryName(cc) {
+    try {
+      if (!regionNames) regionNames = new Intl.DisplayNames(['ru'], { type: 'region' });
+      return regionNames.of(String(cc).toUpperCase()) || cc;
+    } catch (e) { return cc; }
+  }
+
   let toastTimer;
   function toast(msg, err) {
     const t = $('toast');
@@ -105,18 +124,18 @@
     const os = S.platform.os;
     const mode = forceMode || (os === 'android' ? 'android' : S.state.settings.mode);
     const xc = C.xrayCount(compiled);
-    const ports = await N.call('free_ports', { count: 2 + xc });
+    const ports = await N.call('free_ports', { count: 3 + xc });
     const secret = C.randomToken(16);
     const auth = { user: 'nl' + C.randomToken(4), pass: C.randomToken(16) };
     const b = C.build({ nodes: compiled, auto: auto, mode: mode, os: os, ruDirect: S.state.settings.ruDirect,
-      rulesDir: S.platform.rulesDir, ports: { clash: ports[0], inbound: mode === 'proxy' ? C.PROXY_PORT : ports[1], xray: ports.slice(2) },
+      rulesDir: S.platform.rulesDir, ports: { clash: ports[0], inbound: mode === 'proxy' ? C.PROXY_PORT : ports[1], check: ports[2], xray: ports.slice(3) },
       secret: secret, auth: auth });
     const names = {};
     Object.keys(b.tags).forEach(function (t) { names[t] = used[b.tags[t]].name; });
     return {
       mode: mode, singbox: JSON.stringify(b.singbox), xray: b.xray ? JSON.stringify(b.xray) : null,
       clashPort: ports[0], clashSecret: secret, proxyPort: C.PROXY_PORT,
-      socksPort: ports[1], socksUser: auth.user, socksPass: auth.pass,
+      socksPort: ports[1], socksUser: auth.user, socksPass: auth.pass, checkPort: ports[2],
       label: auto ? 'Авто' : used[0].name, names: names, autoConnect: !!S.state.settings.autoConnect,
       tags: b.tags
     };
@@ -138,16 +157,7 @@
 
   // ───────── подключение ─────────
 
-  async function toggle() {
-    if (S.busy) return;
-    const st = S.status.state;
-    if (st === 'on' || st === 'connecting') {
-      S.busy = true;
-      try { await N.call('disconnect'); } catch (e) { toast(e.message, true); }
-      S.busy = false;
-      poll();
-      return;
-    }
+  async function connect() {
     const sel = selection();
     if (!sel) { go('servers'); openAdd(); return; }
     S.busy = true;
@@ -165,10 +175,26 @@
     poll();
   }
 
-  async function reconnectIfOn() {
-    if (S.status.state !== 'on') { pushReady(); return; }
-    try { await N.call('disconnect'); } catch (e) { /* уже отключено */ }
-    await toggle();
+  async function disconnect() {
+    S.busy = true;
+    try { await N.call('disconnect'); } catch (e) { toast(e.message, true); }
+    setStatus({ state: 'off' });
+    S.busy = false;
+  }
+
+  async function toggle() {
+    if (S.busy) return;
+    const st = S.status.state;
+    if (st === 'on' || st === 'connecting') { await disconnect(); poll(); return; }
+    await connect();
+  }
+
+  /** Переподключиться с новыми настройками (если было подключено) */
+  async function reconnectIfOn(msg) {
+    if (S.status.state !== 'on' || S.busy) { pushReady(); return; }
+    if (msg) toast(msg);
+    await disconnect();
+    await connect();
   }
 
   // ───────── состояние ─────────
@@ -187,7 +213,8 @@
     document.body.className = document.body.className.replace(/\bst-\w+/g, '').trim() + ' st-' + s;
     const power = $('power');
     let title = 'Не подключено', sub = 'Нажмите, чтобы подключиться';
-    if (s === 'connecting') { title = 'Подключение…'; sub = S.platform && S.platform.os === 'macos' && S.state.settings.mode === 'tun' ? 'Может понадобиться пароль администратора' : ''; }
+    if (s === 'connecting' && st.stage === 'check') { title = 'Подключение…'; sub = 'Проверяем, что сервер пропускает трафик'; }
+    else if (s === 'connecting') { title = 'Подключение…'; sub = S.platform && S.platform.os === 'macos' && S.state.settings.mode === 'tun' ? 'Может понадобиться пароль администратора' : ''; }
     else if (s === 'on') { title = 'Подключено'; sub = st.since ? duration(Date.now() - st.since) : ''; }
     else if (s === 'error') { title = 'Ошибка'; sub = st.error || 'Не удалось подключиться'; }
     else if (S.lastError) { sub = S.lastError; }
@@ -206,6 +233,16 @@
     }
     S.prev = { rx: st.rx || 0, tx: st.tx || 0, t: now };
     $('speed').classList.toggle('hidden', s !== 'on');
+    const geoKey = s === 'on' ? (st.country || '') + '|' + (st.ip || '') : '';
+    if (geoKey !== S.geoKey) {
+      S.geoKey = geoKey;
+      const g = $('geo');
+      if (geoKey && (st.country || st.ip)) {
+        g.innerHTML = flagImg(st.country) + (st.country ? '<span>' + esc(countryName(st.country)) + '</span>' : '') +
+          (st.ip ? '<span class="ip">' + esc(st.ip) + '</span>' : '');
+        g.classList.remove('hidden');
+      } else { g.classList.add('hidden'); g.innerHTML = ''; }
+    }
 
     if (s === 'error' && old !== 'error' && st.error) toast(st.error, true);
     if (s === 'on' && st.clashPort && now - nowTimer > 5000) { nowTimer = now; updateAutoNow(st); }
@@ -242,10 +279,7 @@
   }
 
   function renderCurrent() {
-    const mode = S.state.settings.mode;
-    Array.prototype.forEach.call(document.querySelectorAll('#mode-seg button'), function (b) {
-      b.setAttribute('aria-checked', String(b.dataset.mode === mode));
-    });
+    $('mode-note').textContent = S.state.settings.mode === 'proxy' ? 'Режим: системный прокси (сменить — в настройках)' : '';
     const sel = selection();
     if (!sel) {
       $('cur-badge').textContent = '+';
@@ -255,12 +289,12 @@
     }
     if (sel.auto) {
       $('cur-badge').textContent = 'АВТО';
-      $('cur-name').textContent = sel.sub.name;
-      $('cur-info').textContent = S.autoNow ? 'Сейчас: ' + S.autoNow : 'Самый быстрый из ' + sel.nodes.length;
+      $('cur-name').innerHTML = nameHtml(sel.sub.name);
+      $('cur-info').innerHTML = S.autoNow ? 'Сейчас: ' + nameHtml(S.autoNow) : 'Самый быстрый из ' + sel.nodes.length;
     } else {
       const n = sel.node;
       $('cur-badge').textContent = badge(n.proto);
-      $('cur-name').textContent = n.name;
+      $('cur-name').innerHTML = nameHtml(n.name);
       const d = S.delays[n.id];
       $('cur-info').textContent = (L.TITLES[n.proto] || n.proto) + (typeof d === 'number' && d >= 0 ? ' · ' + d + ' мс' : '');
     }
@@ -271,7 +305,7 @@
   function nodeRow(n, active) {
     return '<div class="row node' + (active ? ' active' : '') + '" data-node="' + esc(n.id) + '">' +
       '<span class="sel"></span><span class="badge">' + esc(badge(n.proto)) + '</span>' +
-      '<span class="grow"><span class="title">' + esc(n.name) + '</span><span class="muted small title">' + esc(n.host) + (n.port ? ':' + n.port : '') + '</span></span>' +
+      '<span class="grow"><span class="title">' + nameHtml(n.name) + '</span><span class="muted small title">' + esc(n.host) + (n.port ? ':' + n.port : '') + '</span></span>' +
       delayHtml(n.id) + '<button class="more" data-menu-node="' + esc(n.id) + '" aria-label="Действия">' + DOTS + '</button></div>';
   }
 
@@ -286,7 +320,7 @@
       else if (s.info && (s.info.upload || s.info.download)) info.push(bytes(s.info.upload + s.info.download));
       if (s.info && s.info.expire) info.push('до ' + date(s.info.expire));
       if (S.updating === s.id) info = ['обновление…'];
-      h += '<div class="group"><div class="group-head"><span class="grow"><span class="title">' + esc(s.name) + '</span>' +
+      h += '<div class="group"><div class="group-head"><span class="grow"><span class="title">' + nameHtml(s.name) + '</span>' +
         '<span class="muted small">' + esc(info.join(' · ') || (s.nodes.length + ' серв.')) + '</span></span>' +
         '<button class="more" data-menu-sub="' + esc(s.id) + '" aria-label="Подписка">' + DOTS + '</button></div>';
       if (s.nodes.length > 1) {
@@ -317,10 +351,9 @@
     $('opt-autoconnect').checked = !!st.autoConnect;
     $('opt-autostart').checked = !!st.autostart;
     const p = S.platform || {};
-    if (p.os === 'macos') $('tun-hint').textContent = 'Весь трафик компьютера идёт через сервер. При подключении macOS спросит пароль администратора';
-    if (p.os === 'linux' && p.appimage) $('tun-hint').textContent = 'Весь трафик компьютера идёт через сервер. При подключении система спросит пароль';
-    const cores = p.cores || {};
-    $('about').innerHTML = 'NetLine VPN ' + esc(p.version || '') + '<br>sing-box ' + esc(cores.singbox || '—') + ' · Xray ' + esc(cores.xray || '—');
+    if (p.os === 'macos') $('tun-hint').textContent = 'Через сервер идёт трафик всех программ. При подключении macOS спросит пароль администратора';
+    if (p.os === 'linux' && p.appimage) $('tun-hint').textContent = 'Через сервер идёт трафик всех программ. При подключении система спросит пароль';
+    $('about').textContent = 'NetLine VPN ' + (p.version || '');
   }
 
   // ───────── окна ─────────
@@ -581,7 +614,7 @@
   function selectNode(id) {
     S.state.selected = { id: id };
     save(); renderServers(); renderCurrent();
-    if (S.status.state === 'on') reconnectIfOn();
+    if (S.status.state === 'on') reconnectIfOn('Переключаемся на выбранный сервер');
   }
 
   function nodeMenu(id) {
@@ -636,7 +669,7 @@
       if (t.dataset.auto) {
         S.state.selected = { auto: t.dataset.auto };
         save(); renderServers(); renderCurrent();
-        if (S.status.state === 'on') reconnectIfOn();
+        if (S.status.state === 'on') reconnectIfOn('Переключаемся на выбранный сервер');
       }
     });
     $('modal').addEventListener('click', function (e) { if (e.target === $('modal')) closeSheet(); });
@@ -654,13 +687,10 @@
       rd.onload = function () { addFromText(String(rd.result), null, f.name.replace(/\.(conf|ovpn|json|txt)$/i, '')); };
       rd.readAsText(f);
     };
-    document.querySelectorAll('#mode-seg button').forEach(function (b) {
-      b.onclick = function () { setMode(b.dataset.mode); };
-    });
     document.querySelectorAll('input[name=mode]').forEach(function (r) {
       r.onchange = function () { if (r.checked) setMode(r.value); };
     });
-    $('opt-ru').onchange = function () { S.state.settings.ruDirect = this.checked; save(); reconnectIfOn(); };
+    $('opt-ru').onchange = function () { S.state.settings.ruDirect = this.checked; save(); reconnectIfOn('Переподключаемся с новой настройкой'); };
     $('opt-autoconnect').onchange = function () { S.state.settings.autoConnect = this.checked; save(); };
     $('opt-autostart').onchange = async function () {
       const v = this.checked;
@@ -690,7 +720,7 @@
     if (S.state.settings.mode === m) return;
     S.state.settings.mode = m;
     save(); renderCurrent(); renderSettings();
-    reconnectIfOn();
+    reconnectIfOn(m === 'proxy' ? 'Переподключаемся в режиме «Системный прокси»' : 'Переподключаемся в режиме VPN');
   }
 
   // ───────── запуск ─────────

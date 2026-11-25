@@ -13,7 +13,7 @@ npx @tauri-apps/cli@2 dev                  # запуск для разрабо�
 npx @tauri-apps/cli@2 build                # установщики в desktop/target/release/bundle
 ```
 
-Ядра (`desktop/binaries/netline-singbox-<платформа>`, `netline-xray-<платформа>`) и списки сайтов
+Ядра (`desktop/binaries/netline-core-<платформа>`, `netline-helper-<платформа>`) и списки сайтов
 (`desktop/resources/rules/*.srs`) скачивает `tools/fetch-cores.sh`, версии — в `cores.env`.
 
 Права на VPN:

@@ -34,6 +34,7 @@
       </button>
       <div class="state" id="state">Не подключено</div>
       <div class="sub" id="state-sub">Нажмите, чтобы подключиться</div>
+      <div class="geo hidden" id="geo"></div>
       <div class="speed hidden" id="speed">
         <span><i>↓</i><b id="down">0 Б/с</b></span>
         <span><i>↑</i><b id="up">0 Б/с</b></span>
@@ -48,10 +49,7 @@
         <svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg>
       </button>
 
-      <div class="seg desktop-only" id="mode-seg" role="radiogroup" aria-label="Режим">
-        <button data-mode="tun" role="radio">VPN</button>
-        <button data-mode="proxy" role="radio">Прокси</button>
-      </div>
+      <div class="mode-note desktop-only muted small" id="mode-note"></div>
     </div>
   </section>
 
@@ -83,9 +81,9 @@
       <div class="group desktop-only">
         <div class="group-title">Режим работы</div>
         <label class="row radio"><input type="radio" name="mode" value="tun">
-          <span class="grow"><span class="title">VPN</span><span class="muted small" id="tun-hint">Весь трафик компьютера идёт через сервер</span></span></label>
+          <span class="grow"><span class="title">VPN — весь компьютер</span><span class="muted small" id="tun-hint">Через сервер идёт трафик всех программ. Рекомендуется</span></span></label>
         <label class="row radio"><input type="radio" name="mode" value="proxy">
-          <span class="grow"><span class="title">Системный прокси</span><span class="muted small">Браузеры и большинство программ, без прав администратора. Порт 10808</span></span></label>
+          <span class="grow"><span class="title">Системный прокси</span><span class="muted small">Тот же выбранный сервер, но только для браузеров и программ, которые учитывают системный прокси. Отдельный прокси-сервер добавлять не нужно. Адрес для других программ: 127.0.0.1:10808</span></span></label>
       </div>
       <div class="group">
         <label class="row"><span class="grow"><span class="title">Российские сайты напрямую</span>
@@ -100,7 +98,8 @@
       <div class="group">
         <button class="row link" id="btn-log"><span class="grow title">Журнал подключения</span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button>
         <button class="row link" id="btn-site"><span class="grow title">Страница программы на GitHub</span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button>
-        <button class="row link desktop-only" id="btn-quit"><span class="grow title bad">Выйти из программы</span></button>
+        <button class="row link desktop-only" id="btn-quit"><span class="grow"><span class="title bad">Выйти из программы</span>
+          <span class="muted small">Крестик окна сворачивает программу в трей, VPN продолжает работать</span></span></button>
       </div>
       <div class="about muted small" id="about"></div>
     </div>

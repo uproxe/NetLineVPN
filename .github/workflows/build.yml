@@ -10,8 +10,7 @@ on:
   push:
     branches: [main]
     tags: ['v*']
-    paths-ignore: ['**.md', 'docs/**', '.github/ISSUE_TEMPLATE/**', 'branding/**']
-  pull_request:
+    paths-ignore: ['**.md', 'docs/**', '.github/ISSUE_TEMPLATE/**', '.github/SECURITY.md', 'branding/**', 'LICENSE']
   workflow_dispatch:
     inputs:
       release:
@@ -107,16 +106,19 @@ jobs:
           if ($p.ExitCode -ne 0) { throw "Установщик завершился с кодом $($p.ExitCode)" }
           $dir = Join-Path $env:ProgramFiles 'NetLine VPN'
           Get-ChildItem $dir -Recurse | Select-Object FullName, Length | Format-Table -AutoSize
-          foreach ($f in 'netline-vpn.exe', 'netline-singbox.exe', 'netline-xray.exe', 'libcronet.dll', 'rules\geoip-ru.srs', 'rules\geosite-category-ru.srs') {
+          foreach ($f in 'netline-vpn.exe', 'netline-core.exe', 'netline-helper.exe', 'libcronet.dll', 'rules\geoip-ru.srs', 'rules\geosite-category-ru.srs') {
             if (-not (Test-Path (Join-Path $dir $f))) { throw "После установки нет файла $f" }
           }
-          & (Join-Path $dir 'netline-singbox.exe') version
-          & (Join-Path $dir 'netline-xray.exe') version
+          & (Join-Path $dir 'netline-core.exe') version
+          & (Join-Path $dir 'netline-helper.exe') version
+          netsh advfirewall firewall show rule name="NetLine VPN"
+          if ($LASTEXITCODE -ne 0) { throw "Нет правила брандмауэра для ядра" }
       - uses: actions/upload-artifact@v6
         with:
           name: windows
           path: dist/*
           if-no-files-found: error
+          retention-days: 7
 
   linux:
     name: Linux
@@ -161,9 +163,9 @@ jobs:
           dpkg-deb -I dist/*.deb
           dpkg-deb -c dist/*.deb | grep -E 'usr/bin/|rules/|\.desktop'
           sudo apt-get install -y ./dist/netline-vpn_*_amd64.deb
-          getcap /usr/bin/netline-singbox | grep -q cap_net_admin || { echo "::error::setcap не сработал"; exit 1; }
-          /usr/bin/netline-singbox version | head -1
-          /usr/bin/netline-xray version | head -1
+          getcap /usr/bin/netline-core | grep -q cap_net_admin || { echo "::error::setcap не сработал"; exit 1; }
+          /usr/bin/netline-core version | head -1
+          /usr/bin/netline-helper version | head -1
           grep -q '^Name=NetLine VPN' /usr/share/applications/netline-vpn.desktop
           test -f /usr/lib/netline-vpn/rules/geoip-ru.srs
       - uses: actions/upload-artifact@v6
@@ -171,6 +173,7 @@ jobs:
           name: linux
           path: dist/*
           if-no-files-found: error
+          retention-days: 7
 
   macos:
     name: macOS
@@ -206,9 +209,9 @@ jobs:
           hdiutil attach -nobrowse -readonly -mountpoint /tmp/nl dist/*.dmg >/dev/null
           APP="/tmp/nl/NetLine VPN.app"
           ls -la "$APP/Contents/MacOS" "$APP/Contents/Resources/rules"
-          lipo -info "$APP/Contents/MacOS/netline-vpn" "$APP/Contents/MacOS/netline-singbox" "$APP/Contents/MacOS/netline-xray"
+          lipo -info "$APP/Contents/MacOS/netline-vpn" "$APP/Contents/MacOS/netline-core" "$APP/Contents/MacOS/netline-helper"
           codesign --verify --deep --strict "$APP" && echo "подпись (ad-hoc) в порядке"
-          "$APP/Contents/MacOS/netline-singbox" version | head -1
+          "$APP/Contents/MacOS/netline-core" version | head -1
           hdiutil detach /tmp/nl >/dev/null
           ls -la dist
       - uses: actions/upload-artifact@v6
@@ -216,6 +219,7 @@ jobs:
           name: macos
           path: dist/*
           if-no-files-found: error
+          retention-days: 7
       - name: Добавить в релиз
         if: needs.test.outputs.release == 'true'
         env:
@@ -242,7 +246,7 @@ jobs:
       - name: Версии Android Gradle Plugin и Gradle
         id: v
         run: bash tools/android-versions.sh | tee -a "$GITHUB_OUTPUT"
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v5
         with:
           gradle-version: ${{ steps.v.outputs.gradle }}
       - name: Ключ подписи
@@ -277,6 +281,7 @@ jobs:
           name: android
           path: dist/*
           if-no-files-found: error
+          retention-days: 7
 
   release:
     name: Релиз

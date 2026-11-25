@@ -36,6 +36,9 @@ public final class NetLineVpn extends VpnService {
   static volatile String state = "off";
   static volatile long since;
   static volatile String error = "";
+  static volatile String stage = "";
+  static volatile String ip = "";
+  static volatile String country = "";
   static volatile JSONObject current;
   private static volatile JSONObject pending;
   private static volatile Done pendingDone;
@@ -73,6 +76,11 @@ public final class NetLineVpn extends VpnService {
       o.put("state", state);
       o.put("since", since);
       o.put("error", error);
+      o.put("stage", stage);
+      if ("on".equals(state)) {
+        o.put("ip", ip);
+        o.put("country", country);
+      }
       long rx = 0, tx = 0;
       if ("on".equals(state)) {
         try {
@@ -141,7 +149,7 @@ public final class NetLineVpn extends VpnService {
       // 1. Xray, если сервер требует его возможностей
       final String xcfg = p.optString("xray", "");
       if (!xcfg.isEmpty() && !"null".equals(xcfg)) {
-        xray = new Core(this, "xray");
+        xray = new Core(this, "helper");
         xray.onExit = this::coreDied;
         xray.start(xcfg, work);
         final JSONObject xj = new JSONObject(xcfg);
@@ -149,10 +157,20 @@ public final class NetLineVpn extends VpnService {
         if (in != null && in.length() > 0) xray.waitPort(in.getJSONObject(0).optInt("port"), 8000);
       }
       // 2. sing-box
-      singbox = new Core(this, "sing-box");
+      singbox = new Core(this, "core");
       singbox.onExit = this::coreDied;
       singbox.start(p.getString("singbox"), work);
       singbox.waitPort(p.getInt("socksPort"), 20000);
+      // проверка через сервер до включения VPN: если трафик не идёт — VPN не включаем
+      final int checkPort = p.optInt("checkPort");
+      if (checkPort > 0) {
+        stage = "check";
+        final String[] geo = Check.until(checkPort, p.getString("socksUser"), p.getString("socksPass"), 25000,
+            () -> singbox != null && singbox.alive() && (xray == null || xray.alive()));
+        ip = geo[0];
+        country = geo[1];
+        stage = "";
+      }
       // 3. VPN-интерфейс
       final Builder b = new Builder();
       b.setSession(p.optString("label", "NetLine VPN"));
@@ -254,6 +272,7 @@ public final class NetLineVpn extends VpnService {
     stopCores();
     current = null;
     since = 0;
+    stage = "";
     state = err == null ? "off" : "error";
     error = err == null ? "" : err;
     notifyTile(this);

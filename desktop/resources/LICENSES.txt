@@ -17,3 +17,6 @@ hev-socks5-tunnel (только Android) — MIT
 
 Исходный код этих программ доступен по ссылкам выше. NetLine VPN запускает их
 как отдельные процессы и не изменяет.
+
+Флаги стран — Twemoji (графика), CC BY 4.0
+  https://github.com/jdecked/twemoji — © Twitter, Inc. и другие участники

@@ -165,7 +165,7 @@ impl Proc {
     /// Запустить ядро. exe — путь к ядру, args — его аргументы.
     pub fn spawn(name: &'static str, exe: &Path, args: &[String], log: &Path, run_dir: &Path, how: Priv) -> Result<Proc, String> {
         if !exe.exists() {
-            return Err(format!("Не найдено ядро {}: переустановите программу", exe.display()));
+            return Err(format!("Не найден файл {}: переустановите программу", exe.display()));
         }
         spawn_impl(name, exe, args, log, run_dir, how)
     }
@@ -207,7 +207,7 @@ fn spawn_impl(name: &'static str, exe: &Path, args: &[String], log: &Path, run_d
         .stderr(err)
         .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
         .spawn()
-        .map_err(|e| format!("Не удалось запустить {name}: {e}"))?;
+        .map_err(|e| format!("Не удалось запустить ядро VPN ({name}): {e}"))?;
     job::adopt(&child);
     Ok(Proc { name, child, stop_file: None })
 }
@@ -256,7 +256,7 @@ fn spawn_impl(name: &'static str, exe: &Path, args: &[String], log: &Path, run_d
         .stdout(Stdio::null())
         .stderr(errlog)
         .spawn()
-        .map_err(|e| format!("Не удалось запустить {name}: {e}"))?;
+        .map_err(|e| format!("Не удалось запустить ядро VPN ({name}): {e}"))?;
     Ok(Proc { name, child, stop_file: Some(stop) })
 }
 
@@ -305,6 +305,9 @@ struct Inner {
     names: Value,
     mode: String,
     proxy_set: bool,
+    stage: &'static str,
+    ip: String,
+    country: String,
 }
 
 pub struct Core {
@@ -326,6 +329,9 @@ pub struct Request {
     pub clash_secret: String,
     pub proxy_port: u16,
     pub names: Value,
+    pub check_port: u16,
+    pub check_user: String,
+    pub check_pass: String,
 }
 
 impl Request {
@@ -340,6 +346,9 @@ impl Request {
             clash_secret: s("clashSecret").unwrap_or_default(),
             proxy_port: n("proxyPort"),
             names: v.get("names").cloned().unwrap_or(Value::Null),
+            check_port: n("checkPort"),
+            check_user: s("socksUser").unwrap_or_default(),
+            check_pass: s("socksPass").unwrap_or_default(),
         })
     }
 }
@@ -388,7 +397,7 @@ fn rootable_copy(exe: &Path, run_dir: &Path) -> PathBuf {
     if std::env::var_os("APPIMAGE").is_none() {
         return exe.to_path_buf();
     }
-    let dst = run_dir.join("netline-singbox");
+    let dst = run_dir.join("netline-core");
     let same = fs::metadata(&dst).map(|m| m.len()).ok() == fs::metadata(exe).map(|m| m.len()).ok();
     if !same && fs::copy(exe, &dst).is_ok() {
         use std::os::unix::fs::PermissionsExt;
@@ -426,6 +435,9 @@ impl Core {
                 names: Value::Null,
                 mode: String::new(),
                 proxy_set: false,
+                stage: "",
+                ip: String::new(),
+                country: String::new(),
             }),
             rx: Arc::new(AtomicU64::new(0)),
             tx: Arc::new(AtomicU64::new(0)),
@@ -452,6 +464,9 @@ impl Core {
             "clashSecret": if i.phase == Phase::On { i.clash.1.clone() } else { String::new() },
             "names": i.names,
             "mode": i.mode,
+            "stage": i.stage,
+            "ip": if i.phase == Phase::On { i.ip.clone() } else { String::new() },
+            "country": if i.phase == Phase::On { i.country.clone() } else { String::new() },
         })
     }
 
@@ -468,6 +483,7 @@ impl Core {
             i.gen += 1;
             i.phase = Phase::Error;
             i.error = msg;
+            i.stage = "";
             std::mem::take(&mut i.procs)
         };
         for p in procs {
@@ -497,12 +513,15 @@ impl Core {
             i.clash = (req.clash_port, req.clash_secret.clone());
             i.names = req.names.clone();
             i.mode = req.mode.clone();
+            i.stage = "start";
+            i.ip.clear();
+            i.country.clear();
             i.gen
         };
         self.rx.store(0, Ordering::Relaxed);
         self.tx.store(0, Ordering::Relaxed);
         self.notify();
-        match self.launch(gen, &req) {
+        match self.launch(gen, &req).and_then(|_| self.verify(gen, &req)) {
             Ok(()) => {
                 let ok = {
                     let mut i = self.inner.lock().unwrap();
@@ -553,9 +572,9 @@ impl Core {
             // 1. Xray (если сервер требует его возможностей)
             if let Some(x) = &req.xray {
                 write_private(&x_cfg, x.as_bytes()).map_err(|e| e.to_string())?;
-                let exe = core_path("netline-xray");
+                let exe = core_path("netline-helper");
                 let args = vec!["run".into(), "-c".into(), x_cfg.to_string_lossy().into_owned()];
-                let p = Proc::spawn("xray", &exe, &args, &self.log, &self.run_dir, Priv::None)?;
+                let p = Proc::spawn("helper", &exe, &args, &self.log, &self.run_dir, Priv::None)?;
                 self.add(gen, p)?;
                 let ports = xray_ports(x);
                 let t = Instant::now();
@@ -570,7 +589,7 @@ impl Core {
                 }
             }
             // 2. sing-box
-            let exe = core_path("netline-singbox");
+            let exe = core_path("netline-core");
             let how = if req.mode == "tun" { tun_privilege(&exe) } else { Priv::None };
             #[cfg(target_os = "linux")]
             let exe = if how == Priv::Pkexec { rootable_copy(&exe, &self.run_dir) } else { exe };
@@ -581,7 +600,7 @@ impl Core {
                 "-D".into(),
                 self.run_dir.to_string_lossy().into_owned(),
             ];
-            let p = Proc::spawn("sing-box", &exe, &args, &self.log, &self.run_dir, how)?;
+            let p = Proc::spawn("core", &exe, &args, &self.log, &self.run_dir, how)?;
             self.add(gen, p)?;
             // ждём, пока ядро начнёт отвечать (с окном пароля — дольше)
             let limit = if how == Priv::None { 30 } else { 180 };
@@ -608,8 +627,8 @@ impl Core {
                 }
                 thread::sleep(Duration::from_millis(150));
             }
-            // 3. Windows: системный прокси ставим сами (sing-box снимает его только при мягкой остановке)
-            if req.mode == "proxy" && cfg!(windows) {
+            // 3. Windows и macOS: системный прокси ставим и проверяем сами
+            if req.mode == "proxy" && cfg!(any(windows, target_os = "macos")) {
                 crate::sys::set_system_proxy(req.proxy_port)?;
                 self.inner.lock().unwrap().proxy_set = true;
             }
@@ -619,6 +638,50 @@ impl Core {
         thread::sleep(Duration::from_millis(300));
         cleanup();
         result
+    }
+
+    /// Проверить, что через сервер действительно идёт трафик, и узнать внешний IP и страну
+    fn verify(&self, gen: u64, req: &Request) -> Result<(), String> {
+        if req.check_port == 0 {
+            return Ok(());
+        }
+        {
+            let mut i = self.inner.lock().unwrap();
+            if i.gen != gen {
+                return Err("Подключение отменено".into());
+            }
+            i.stage = "check";
+        }
+        self.notify();
+        let deadline = Instant::now() + Duration::from_secs(25);
+        let mut last = String::new();
+        while Instant::now() < deadline {
+            if self.inner.lock().unwrap().gen != gen {
+                return Err("Подключение отменено".into());
+            }
+            match crate::net::check(req.check_port, &req.check_user, &req.check_pass) {
+                Ok((ip, country)) => {
+                    let mut lf = OpenOptions::new().create(true).append(true).open(&self.log).ok();
+                    if let Some(f) = lf.as_mut() {
+                        let _ = writeln!(f, "проверка пройдена: IP {}, страна {}", if ip.is_empty() { "?" } else { ip.as_str() }, if country.is_empty() { "?" } else { country.as_str() });
+                    }
+                    let mut i = self.inner.lock().unwrap();
+                    i.ip = ip;
+                    i.country = country;
+                    i.stage = "";
+                    return Ok(());
+                }
+                Err(e) => last = e,
+            }
+            if !self.all_alive(gen) {
+                return Err(explain(&log_tail(&self.log, 30)));
+            }
+            thread::sleep(Duration::from_millis(700));
+        }
+        if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(&self.log) {
+            let _ = writeln!(f, "проверка не пройдена: {last}");
+        }
+        Err("Сервер не пропускает трафик — интернет через него не работает. Проверьте ссылку или выберите другой сервер (подробности — в журнале)".into())
     }
 
     fn add(&self, gen: u64, p: Proc) -> Result<(), String> {
@@ -655,8 +718,8 @@ impl Core {
             if let Some(name) = dead {
                 let tail = log_tail(&me.log, 30);
                 let mut msg = explain(&tail);
-                if msg == "Ядро VPN неожиданно завершилось" {
-                    msg = format!("Ядро {name} неожиданно завершилось");
+                if msg == "Ядро VPN неожиданно завершилось" && name == "helper" {
+                    msg = "Вспомогательное ядро VPN неожиданно завершилось".into();
                 }
                 me.fail(gen, msg);
                 return;
@@ -685,6 +748,7 @@ impl Core {
             i.gen += 1;
             i.phase = Phase::Off;
             i.error.clear();
+            i.stage = "";
             i.since = 0;
             std::mem::take(&mut i.procs)
         };
@@ -711,7 +775,7 @@ impl Core {
             if let Some(x) = xray {
                 write_private(&x_cfg, x.as_bytes()).map_err(|e| e.to_string())?;
                 let args = vec!["run".into(), "-c".into(), x_cfg.to_string_lossy().into_owned()];
-                procs.push(Proc::spawn("xray", &core_path("netline-xray"), &args, &log, &dir, Priv::None)?);
+                procs.push(Proc::spawn("helper", &core_path("netline-helper"), &args, &log, &dir, Priv::None)?);
             }
             let args = vec![
                 "run".into(),
@@ -720,7 +784,7 @@ impl Core {
                 "-D".into(),
                 dir.to_string_lossy().into_owned(),
             ];
-            procs.push(Proc::spawn("sing-box", &core_path("netline-singbox"), &args, &log, &dir, Priv::None)?);
+            procs.push(Proc::spawn("core", &core_path("netline-core"), &args, &log, &dir, Priv::None)?);
             let t = Instant::now();
             while !port_open(clash_port) {
                 if procs.iter_mut().any(|p| !p.alive()) {

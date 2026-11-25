@@ -11,7 +11,7 @@ pub fn init(data_dir: PathBuf) {
     clear_system_proxy();
 }
 
-#[cfg_attr(not(windows), allow(dead_code))]
+#[cfg_attr(target_os = "linux", allow(dead_code))]
 fn data_dir() -> PathBuf {
     DATA_DIR.get().cloned().unwrap_or_else(std::env::temp_dir)
 }
@@ -24,8 +24,7 @@ pub fn exe_path() -> String {
     std::env::current_exe().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default()
 }
 
-// ───────── системный прокси (Windows) ─────────
-// На macOS и Linux прокси включает и выключает само ядро sing-box (set_system_proxy).
+// ───────── системный прокси ─────────
 
 #[cfg(windows)]
 const INET: &str = r"Software\Microsoft\Windows\CurrentVersion\Internet Settings";
@@ -84,12 +83,88 @@ pub fn clear_system_proxy() {
     let _ = std::fs::remove_file(marker);
 }
 
-#[cfg(not(windows))]
+// macOS: прокси ставится во все включённые сетевые службы (Wi-Fi, Ethernet…), а не только в текущую —
+// так он не пропадает при смене сети. После установки проверяем, что система его действительно применила.
+
+#[cfg(target_os = "macos")]
+const NS: &str = "/usr/sbin/networksetup";
+
+#[cfg(target_os = "macos")]
+fn mac_services() -> Vec<String> {
+    let out = std::process::Command::new(NS).arg("-listallnetworkservices").output();
+    let Ok(out) = out else { return Vec::new() };
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .skip(1)
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty() && !l.starts_with('*'))
+        .collect()
+}
+
+#[cfg(target_os = "macos")]
+fn ns(args: &[&str]) -> Result<(), String> {
+    let out = std::process::Command::new(NS).args(args).output().map_err(|e| e.to_string())?;
+    let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    if out.status.success() && !text.contains("Error") {
+        Ok(())
+    } else {
+        Err(text.trim().to_string())
+    }
+}
+
+#[cfg(target_os = "macos")]
+pub fn set_system_proxy(port: u16) -> Result<(), String> {
+    let p = port.to_string();
+    let services = mac_services();
+    if services.is_empty() {
+        return Err("Не найдено ни одной сетевой службы macOS".into());
+    }
+    let _ = std::fs::write(data_dir().join("sysproxy.json"), "{}");
+    let mut last = String::new();
+    for s in &services {
+        for cmd in ["-setwebproxy", "-setsecurewebproxy", "-setsocksfirewallproxy"] {
+            if let Err(e) = ns(&[cmd, s.as_str(), "127.0.0.1", p.as_str()]) {
+                last = e;
+            }
+        }
+        let _ = ns(&["-setproxybypassdomains", s.as_str(), "localhost", "127.0.0.1", "*.local", "169.254/16", "10/8", "172.16/12", "192.168/16"]);
+    }
+    // проверка: что видит система
+    let out = std::process::Command::new("/usr/sbin/scutil").arg("--proxy").output().map_err(|e| e.to_string())?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    let on = text.lines().any(|l| l.split_whitespace().collect::<Vec<_>>() == ["HTTPEnable", ":", "1"]);
+    let our = text.lines().any(|l| l.split_whitespace().collect::<Vec<_>>() == ["HTTPPort", ":", p.as_str()]);
+    if on && our {
+        return Ok(());
+    }
+    clear_system_proxy();
+    if last.to_lowercase().contains("admin") {
+        return Err("Для режима «Системный прокси» нужна учётная запись администратора macOS".into());
+    }
+    Err(format!("macOS не включила системный прокси{}", if last.is_empty() { String::new() } else { format!(": {last}") }))
+}
+
+#[cfg(target_os = "macos")]
+pub fn clear_system_proxy() {
+    let marker = data_dir().join("sysproxy.json");
+    if !marker.exists() {
+        return;
+    }
+    for s in mac_services() {
+        for cmd in ["-setwebproxystate", "-setsecurewebproxystate", "-setsocksfirewallproxystate"] {
+            let _ = ns(&[cmd, s.as_str(), "off"]);
+        }
+    }
+    let _ = std::fs::remove_file(marker);
+}
+
+// Linux: прокси включает и снимает само ядро (GNOME и KDE)
+#[cfg(target_os = "linux")]
 pub fn set_system_proxy(_port: u16) -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
 pub fn clear_system_proxy() {}
 
 // ───────── автозапуск ─────────

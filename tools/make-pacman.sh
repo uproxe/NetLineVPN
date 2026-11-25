@@ -30,7 +30,7 @@ optdepend = libayatana-appindicator: значок в области уведом
 INFO
 cat > .INSTALL <<'INST'
 post_install() {
-  setcap cap_net_admin,cap_net_raw,cap_net_bind_service+ep /usr/bin/netline-singbox 2>/dev/null || true
+  setcap cap_net_admin,cap_net_raw,cap_net_bind_service+ep /usr/bin/netline-core 2>/dev/null || true
 }
 post_upgrade() {
   post_install

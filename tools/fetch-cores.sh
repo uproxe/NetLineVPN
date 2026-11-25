@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Скачивает ядра VPN (sing-box, Xray) и списки российских сайтов для сборки.
 #   bash tools/fetch-cores.sh windows-x64 | linux-x64 | macos-universal | android-arm64 | rules <папка>
-# Версии — в cores.env. Ядра кладутся туда, где их ждёт сборка (desktop/binaries, android/app/src/main/jniLibs).
+# Версии — в cores.env. Ядра кладутся туда, где их ждёт сборка (desktop/binaries, android/app/src/main/jniLibs)
+# под нейтральными именами: netline-core (sing-box) и netline-helper (Xray).
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=/dev/null
@@ -43,9 +44,9 @@ case "$TARGET" in
     singbox "sing-box-$SING_BOX_VERSION-windows-amd64.zip" "$TMP/sb"
     xray Xray-windows-64.zip "$TMP/x"
     mkdir -p "$BIN" "$ROOT/desktop/resources"
-    cp "$TMP"/sb/*/sing-box.exe "$BIN/netline-singbox-x86_64-pc-windows-msvc.exe"
+    cp "$TMP"/sb/*/sing-box.exe "$BIN/netline-core-x86_64-pc-windows-msvc.exe"
     cp "$TMP"/sb/*/libcronet.dll "$ROOT/desktop/resources/libcronet.dll"
-    cp "$TMP/x/xray.exe" "$BIN/netline-xray-x86_64-pc-windows-msvc.exe"
+    cp "$TMP/x/xray.exe" "$BIN/netline-helper-x86_64-pc-windows-msvc.exe"
     rules "$ROOT/desktop/resources/rules"
     ;;
   linux-x64)
@@ -53,8 +54,8 @@ case "$TARGET" in
     singbox "sing-box-$SING_BOX_VERSION-linux-amd64-musl.tar.gz" "$TMP/sb"
     xray Xray-linux-64.zip "$TMP/x"
     mkdir -p "$BIN"
-    install -m 755 "$TMP"/sb/*/sing-box "$BIN/netline-singbox-x86_64-unknown-linux-gnu"
-    install -m 755 "$TMP/x/xray" "$BIN/netline-xray-x86_64-unknown-linux-gnu"
+    install -m 755 "$TMP"/sb/*/sing-box "$BIN/netline-core-x86_64-unknown-linux-gnu"
+    install -m 755 "$TMP/x/xray" "$BIN/netline-helper-x86_64-unknown-linux-gnu"
     rules "$ROOT/desktop/resources/rules"
     ;;
   macos-universal)
@@ -63,8 +64,8 @@ case "$TARGET" in
     xray Xray-macos-arm64-v8a.zip "$TMP/xa"
     xray Xray-macos-64.zip "$TMP/xi"
     mkdir -p "$BIN"
-    for n in singbox xray; do
-      if [ $n = singbox ]; then A="$(echo "$TMP"/sa/*/sing-box)"; I="$(echo "$TMP"/si/*/sing-box)"; else A="$TMP/xa/xray"; I="$TMP/xi/xray"; fi
+    for n in core helper; do
+      if [ $n = core ]; then A="$(echo "$TMP"/sa/*/sing-box)"; I="$(echo "$TMP"/si/*/sing-box)"; else A="$TMP/xa/xray"; I="$TMP/xi/xray"; fi
       install -m 755 "$A" "$BIN/netline-$n-aarch64-apple-darwin"
       install -m 755 "$I" "$BIN/netline-$n-x86_64-apple-darwin"
       lipo -create "$A" "$I" -output "$BIN/netline-$n-universal-apple-darwin"
@@ -79,8 +80,8 @@ case "$TARGET" in
     xray Xray-android-arm64-v8a.zip "$TMP/x"
     mkdir -p "$LIBS"
     # Android разрешает запускать программы только из папки библиотек, поэтому имена lib*.so
-    install -m 755 "$TMP"/sb/*/sing-box "$LIBS/libsingbox.so"
-    install -m 755 "$TMP/x/xray" "$LIBS/libxray.so"
+    install -m 755 "$TMP"/sb/*/sing-box "$LIBS/libnlcore.so"
+    install -m 755 "$TMP/x/xray" "$LIBS/libnlhelper.so"
     rules "$ROOT/android/app/src/main/assets/rules"
     ;;
   rules)

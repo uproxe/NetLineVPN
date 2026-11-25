@@ -219,13 +219,13 @@ final class Bridge {
     final String xray = a.optString("xray", "");
     try {
       if (!xray.isEmpty() && !"null".equals(xray)) {
-        final Core x = new Core(c, "xray");
+        final Core x = new Core(c, "helper");
         synchronized (testCores) {
           testCores.add(x);
         }
         x.start(xray, work);
       }
-      final Core s = new Core(c, "sing-box");
+      final Core s = new Core(c, "core");
       synchronized (testCores) {
         testCores.add(s);
       }

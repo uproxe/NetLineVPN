@@ -31,8 +31,8 @@
       "icons/icon.ico"
     ],
     "externalBin": [
-      "binaries/netline-singbox",
-      "binaries/netline-xray"
+      "binaries/netline-core",
+      "binaries/netline-helper"
     ],
     "resources": {
       "resources/rules/geoip-ru.srs": "rules/geoip-ru.srs",

@@ -296,16 +296,16 @@ fn main() {
         .expect("не удалось запустить NetLine VPN");
 
     app.run(|app, event| match event {
-        // окно закрыли: если VPN включён — остаёмся в трее (без окна почти не тратим память)
+        // окно закрыли — программа остаётся в трее (окно выгружается из памяти).
+        // Выйти совсем: правой кнопкой по значку в трее → «Выход» или «Настройки» → «Выйти из программы».
         RunEvent::ExitRequested { code, api, .. } => {
             if code.is_none() {
-                if let Some(state) = app.try_state::<AppState>() {
-                    if state.core.is_active() {
-                        api.prevent_exit();
-                    }
-                }
+                api.prevent_exit();
             }
         }
+        // macOS: щелчок по значку в Dock открывает окно снова
+        #[cfg(target_os = "macos")]
+        RunEvent::Reopen { .. } => show_window(app),
         RunEvent::Exit => {
             if let Some(state) = app.try_state::<AppState>() {
                 state.core.shutdown();

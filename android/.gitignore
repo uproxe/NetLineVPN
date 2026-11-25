@@ -1,0 +1,6 @@
+.gradle/
+build/
+local.properties
+app/src/main/assets/ui/
+app/src/main/assets/rules/
+app/src/main/jniLibs/

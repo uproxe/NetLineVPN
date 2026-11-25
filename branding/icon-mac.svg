@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Значок для macOS: по сетке Apple тело значка 824×824 в центре холста 1024×1024,
+       иначе в Dock и Launchpad он выглядит крупнее остальных программ -->
+  <g transform="translate(100 100) scale(3.21875)">
+    <rect width="256" height="256" rx="56" fill="#0B1220"/>
+    <path d="M 68 128 H 188" stroke="#38BDF8" stroke-width="14" stroke-linecap="round" fill="none"/>
+    <g fill="#38BDF8">
+      <circle cx="68" cy="128" r="15"/>
+      <circle cx="188" cy="128" r="15"/>
+    </g>
+  </g>
+</svg>

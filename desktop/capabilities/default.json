@@ -1,0 +1,6 @@
+{
+  "identifier": "default",
+  "description": "Главное окно: только вызовы самой программы",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

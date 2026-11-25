@@ -1,0 +1,7 @@
+/target/
+/gen/
+/binaries/*
+!/binaries/.gitkeep
+/resources/rules/*
+!/resources/rules/.gitkeep
+/resources/libcronet.dll

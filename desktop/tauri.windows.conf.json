@@ -1,0 +1,10 @@
+{
+  "bundle": {
+    "resources": {
+      "resources/rules/geoip-ru.srs": "rules/geoip-ru.srs",
+      "resources/rules/geosite-category-ru.srs": "rules/geosite-category-ru.srs",
+      "resources/LICENSES.txt": "LICENSES.txt",
+      "resources/libcronet.dll": "libcronet.dll"
+    }
+  }
+}

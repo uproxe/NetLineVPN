@@ -1,0 +1,296 @@
+# Сборка NetLine VPN: тесты, проверка конфигураций настоящими ядрами,
+# установщики для Windows, macOS, Linux и Android, выпуск релиза.
+#
+# Релиз выходит сам, когда в main попадает новая версия (файл VERSION, тега ещё нет),
+# при отправке тега v* или кнопкой «Run workflow» с галочкой «release».
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+    paths-ignore: ['**.md', 'docs/**', '.github/ISSUE_TEMPLATE/**', 'branding/**']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'Выпустить релиз v<версия из VERSION>'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  TAURI_CLI: '@tauri-apps/cli@2'
+
+jobs:
+  test:
+    name: Тесты
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      release: ${{ steps.v.outputs.release }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - name: Версия и нужен ли релиз
+        id: v
+        run: |
+          VER="$(tr -d ' \r\n' < VERSION)"
+          CARGO="$(sed -n 's/^version = "\(.*\)"/\1/p' desktop/Cargo.toml | head -1)"
+          [ "$VER" = "$CARGO" ] || { echo "::error::VERSION ($VER) и desktop/Cargo.toml ($CARGO) различаются"; exit 1; }
+          grep -q "^## \[$VER\]" CHANGELOG.md || { echo "::error::В CHANGELOG.md нет раздела [$VER]"; exit 1; }
+          REL=false
+          case "${{ github.event_name }}:${{ github.ref }}" in
+            push:refs/tags/v*) [ "${{ github.ref }}" = "refs/tags/v$VER" ] && REL=true ;;
+            push:refs/heads/main) git ls-remote --exit-code --tags origin "refs/tags/v$VER" >/dev/null || REL=true ;;
+            workflow_dispatch:refs/heads/main) [ "${{ inputs.release }}" = true ] && REL=true ;;
+          esac
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "release=$REL" >> "$GITHUB_OUTPUT"
+          echo "Версия $VER, выпуск релиза: $REL"
+      - name: Тесты логики
+        run: node tests/test.js
+      - name: Синтаксис скриптов и JSON
+        run: |
+          for f in $(git ls-files '*.js'); do node --check "$f"; done
+          for f in $(git ls-files '*.sh'); do bash -n "$f"; done
+          python3 -c "import json,sys; [json.load(open(f)) for f in sys.argv[1:]]" $(git ls-files '*.json')
+          echo "без ошибок"
+      - name: Конфигурации принимают настоящие sing-box и Xray
+        run: bash tests/check-configs.sh
+
+  windows:
+    name: Windows
+    needs: test
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop
+      - name: Ядра VPN
+        shell: bash
+        run: bash tools/fetch-cores.sh windows-x64
+      - name: Сборка установщика
+        shell: bash
+        working-directory: desktop
+        run: |
+          . ../cores.env
+          export NETLINE_SINGBOX_VERSION="$SING_BOX_VERSION" NETLINE_XRAY_VERSION="$XRAY_VERSION"
+          npx --yes "$TAURI_CLI" build --bundles nsis
+      - name: Файл
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp desktop/target/release/bundle/nsis/*-setup.exe "dist/NetLineVPN-${{ needs.test.outputs.version }}-windows-x64-setup.exe"
+          ls -la dist
+      - name: Проверка установки (тихий режим)
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem dist\*-setup.exe | Select-Object -First 1
+          $p = Start-Process -FilePath $setup.FullName -ArgumentList '/S' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Установщик завершился с кодом $($p.ExitCode)" }
+          $dir = Join-Path $env:ProgramFiles 'NetLine VPN'
+          Get-ChildItem $dir -Recurse | Select-Object FullName, Length | Format-Table -AutoSize
+          foreach ($f in 'netline-vpn.exe', 'netline-singbox.exe', 'netline-xray.exe', 'libcronet.dll', 'rules\geoip-ru.srs', 'rules\geosite-category-ru.srs') {
+            if (-not (Test-Path (Join-Path $dir $f))) { throw "После установки нет файла $f" }
+          }
+          & (Join-Path $dir 'netline-singbox.exe') version
+          & (Join-Path $dir 'netline-xray.exe') version
+      - uses: actions/upload-artifact@v6
+        with:
+          name: windows
+          path: dist/*
+          if-no-files-found: error
+
+  linux:
+    name: Linux
+    needs: test
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop
+      - name: Пакеты для сборки
+        run: |
+          sudo apt-get -o Acquire::Retries=3 update
+          sudo apt-get -o Acquire::Retries=3 install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
+            librsvg2-dev patchelf libarchive-tools zstd file
+      - name: Ядра VPN
+        run: bash tools/fetch-cores.sh linux-x64
+      - name: Сборка .deb, .rpm, AppImage
+        working-directory: desktop
+        env:
+          NO_STRIP: 'true'
+        run: |
+          . ../cores.env
+          export NETLINE_SINGBOX_VERSION="$SING_BOX_VERSION" NETLINE_XRAY_VERSION="$XRAY_VERSION"
+          npx --yes "$TAURI_CLI" build --bundles deb,rpm,appimage
+      - name: Файлы и пакет для Arch
+        run: |
+          VER="${{ needs.test.outputs.version }}"; B=desktop/target/release/bundle
+          mkdir -p dist
+          cp $B/deb/*.deb "dist/netline-vpn_${VER}_amd64.deb"
+          cp $B/rpm/*.rpm "dist/netline-vpn-${VER}-1.x86_64.rpm"
+          cp $B/appimage/*.AppImage "dist/NetLineVPN-${VER}-x86_64.AppImage"
+          bash tools/make-pacman.sh "dist/netline-vpn_${VER}_amd64.deb" "$VER" "dist/netline-vpn-${VER}-1-x86_64.pkg.tar.zst"
+          ls -la dist
+      - name: Проверка пакета .deb
+        run: |
+          dpkg-deb -I dist/*.deb
+          dpkg-deb -c dist/*.deb | grep -E 'usr/bin/|rules/|\.desktop'
+          sudo apt-get install -y ./dist/netline-vpn_*_amd64.deb
+          getcap /usr/bin/netline-singbox | grep -q cap_net_admin || { echo "::error::setcap не сработал"; exit 1; }
+          /usr/bin/netline-singbox version | head -1
+          /usr/bin/netline-xray version | head -1
+          grep -q '^Name=NetLine VPN' /usr/share/applications/netline-vpn.desktop
+          test -f /usr/lib/netline-vpn/rules/geoip-ru.srs
+      - uses: actions/upload-artifact@v6
+        with:
+          name: linux
+          path: dist/*
+          if-no-files-found: error
+
+  macos:
+    name: macOS
+    needs: test
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop
+      - name: Ядра VPN (Apple Silicon + Intel)
+        run: bash tools/fetch-cores.sh macos-universal
+      - name: Сборка .dmg
+        working-directory: desktop
+        run: |
+          . ../cores.env
+          export NETLINE_SINGBOX_VERSION="$SING_BOX_VERSION" NETLINE_XRAY_VERSION="$XRAY_VERSION"
+          npx --yes "$TAURI_CLI" build --target universal-apple-darwin --bundles dmg
+      - name: Файл и проверка
+        run: |
+          mkdir -p dist
+          cp desktop/target/universal-apple-darwin/release/bundle/dmg/*.dmg "dist/NetLineVPN-${{ needs.test.outputs.version }}-macos-universal.dmg"
+          APP="$(ls -d desktop/target/universal-apple-darwin/release/bundle/macos/*.app | head -1)"
+          ls -la "$APP/Contents/MacOS" "$APP/Contents/Resources"
+          lipo -info "$APP/Contents/MacOS/netline-vpn" "$APP/Contents/MacOS/netline-singbox" "$APP/Contents/MacOS/netline-xray"
+          codesign -dv "$APP" 2>&1 | head -5 || true
+          ls -la dist
+      - uses: actions/upload-artifact@v6
+        with:
+          name: macos
+          path: dist/*
+          if-no-files-found: error
+
+  android:
+    name: Android
+    needs: test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Версии Android Gradle Plugin и Gradle
+        id: v
+        run: bash tools/android-versions.sh | tee -a "$GITHUB_OUTPUT"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: ${{ steps.v.outputs.gradle }}
+      - name: Ключ подписи
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          if [ -n "$KS" ]; then
+            echo "$KS" | base64 -d > "$RUNNER_TEMP/netline.jks"
+            echo "NETLINE_KEYSTORE=$RUNNER_TEMP/netline.jks" >> "$GITHUB_ENV"
+            echo "NETLINE_KEYSTORE_PASSWORD=$KS_PASS" >> "$GITHUB_ENV"
+            echo "NETLINE_KEY_ALIAS=${KS_ALIAS:-netline}" >> "$GITHUB_ENV"
+            echo "Подпись: секретный ключ репозитория"
+          else
+            echo "Подпись: открытый ключ из android/signing"
+          fi
+      - name: Сборка APK
+        run: bash tools/android-build.sh "${{ steps.v.outputs.agp }}"
+      - name: Файл и проверка
+        run: |
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          "$BT/apksigner" verify "$APK"
+          "$BT/aapt2" dump badging "$APK" | grep -E "^package|sdkVersion|native-code"
+          unzip -l "$APK" | grep -E 'lib/arm64-v8a/|assets/(ui/index.html|rules/)'
+          mkdir -p dist
+          cp "$APK" "dist/NetLineVPN-${{ needs.test.outputs.version }}-android-arm64.apk"
+          ls -la dist
+      - uses: actions/upload-artifact@v6
+        with:
+          name: android
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    name: Релиз
+    needs: [test, windows, linux, macos, android]
+    if: needs.test.outputs.release == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VER: ${{ needs.test.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v6
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Контрольные суммы и описание
+        run: |
+          cd dist
+          for f in *; do sha256sum "$f" > "$f.sha256"; done
+          cd ..
+          bash tools/release-notes.sh "$VER" > notes.md
+          cat notes.md
+      - name: Публикация
+        run: |
+          set -- \
+            "dist/NetLineVPN-$VER-windows-x64-setup.exe#Windows 10 и 11 — установщик" \
+            "dist/NetLineVPN-$VER-macos-universal.dmg#macOS — Apple Silicon и Intel" \
+            "dist/netline-vpn_${VER}_amd64.deb#Linux — Debian, Ubuntu, Mint, Astra (.deb)" \
+            "dist/netline-vpn-$VER-1.x86_64.rpm#Linux — Fedora, РЕД ОС, openSUSE (.rpm)" \
+            "dist/netline-vpn-$VER-1-x86_64.pkg.tar.zst#Linux — Arch, Manjaro" \
+            "dist/NetLineVPN-$VER-x86_64.AppImage#Linux — любой дистрибутив (AppImage)" \
+            "dist/NetLineVPN-$VER-android-arm64.apk#Android 8 и новее"
+          gh release create "v$VER" --target "$GITHUB_SHA" --title "NetLine VPN $VER" --notes-file notes.md "$@" dist/*.sha256

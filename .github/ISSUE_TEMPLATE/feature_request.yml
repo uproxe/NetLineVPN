@@ -1,0 +1,14 @@
+name: Предложение
+description: Идея, новый протокол или настройка
+labels: [идея]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: Что хотелось бы
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Зачем это нужно

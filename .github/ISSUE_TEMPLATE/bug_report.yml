@@ -1,0 +1,44 @@
+name: Ошибка
+description: Что-то работает не так
+labels: [ошибка]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Спасибо, что сообщаете об ошибке. **Не публикуйте ссылки на свои серверы и подписки** — в них ключи доступа.
+  - type: input
+    id: version
+    attributes:
+      label: Версия NetLine VPN
+      placeholder: "1.0.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Система
+      options: [Windows, macOS, Linux (.deb), Linux (.rpm), Linux (Arch), Linux (AppImage), Android]
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Режим
+      options: [VPN, Прокси, Не важно]
+  - type: input
+    id: proto
+    attributes:
+      label: Протокол сервера
+      placeholder: "VLESS Reality, Hysteria2, WireGuard…"
+  - type: textarea
+    id: what
+    attributes:
+      label: Что произошло и что ожидалось
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Журнал подключения
+      description: «Настройки» → «Журнал подключения» → «Скопировать». Проверьте, что в нём нет адресов ваших серверов.
+      render: text

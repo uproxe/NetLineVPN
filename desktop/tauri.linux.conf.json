@@ -1,0 +1,17 @@
+{
+  "productName": "netline-vpn",
+  "bundle": {
+    "linux": {
+      "deb": {
+        "depends": ["libcap2-bin"],
+        "section": "net",
+        "postInstallScript": "linux/postinst.sh",
+        "desktopTemplate": "linux/netline-vpn.desktop"
+      },
+      "rpm": {
+        "postInstallScript": "linux/postinst.sh",
+        "desktopTemplate": "linux/netline-vpn.desktop"
+      }
+    }
+  }
+}

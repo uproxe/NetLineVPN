@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <title>NetLine VPN</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <!-- Главный экран -->
+  <section class="view" id="v-home">
+    <header class="bar">
+      <div class="brand">
+        <svg viewBox="0 0 256 256" class="logo" aria-hidden="true"><rect x="4" y="4" width="248" height="248" rx="54" fill="#111A2E" stroke="#1E2A44" stroke-width="8"/><path d="M 68 128 H 188" stroke="#38BDF8" stroke-width="14" stroke-linecap="round"/><circle cx="68" cy="128" r="15" fill="#38BDF8"/><circle cx="188" cy="128" r="15" fill="#38BDF8"/></svg>
+        <span>NetLine VPN</span>
+      </div>
+      <button class="icon-btn" data-go="settings" title="Настройки" aria-label="Настройки">
+        <svg viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
+      </button>
+    </header>
+
+    <div class="home">
+      <button class="power" id="power" aria-label="Подключить">
+        <svg viewBox="0 0 200 200" class="ring" aria-hidden="true">
+          <circle cx="100" cy="100" r="92" class="ring-bg"/>
+          <circle cx="100" cy="100" r="92" class="ring-fg"/>
+        </svg>
+        <svg viewBox="0 0 120 40" class="line" aria-hidden="true">
+          <path d="M 16 20 H 104" class="line-path"/>
+          <circle cx="16" cy="20" r="10" class="dot dot-a"/>
+          <circle cx="104" cy="20" r="10" class="dot dot-b"/>
+        </svg>
+      </button>
+      <div class="state" id="state">Не подключено</div>
+      <div class="sub" id="state-sub">Нажмите, чтобы подключиться</div>
+      <div class="speed hidden" id="speed">
+        <span><i>↓</i><b id="down">0 Б/с</b></span>
+        <span><i>↑</i><b id="up">0 Б/с</b></span>
+      </div>
+
+      <button class="card server-card" data-go="servers" id="current">
+        <span class="badge" id="cur-badge">—</span>
+        <span class="grow">
+          <span class="title" id="cur-name">Добавьте сервер</span>
+          <span class="muted small" id="cur-info">Ссылка, подписка, WireGuard или OpenVPN</span>
+        </span>
+        <svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg>
+      </button>
+
+      <div class="seg desktop-only" id="mode-seg" role="radiogroup" aria-label="Режим">
+        <button data-mode="tun" role="radio">VPN</button>
+        <button data-mode="proxy" role="radio">Прокси</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Серверы -->
+  <section class="view hidden" id="v-servers">
+    <header class="bar">
+      <button class="icon-btn" data-go="home" aria-label="Назад"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg></button>
+      <h1>Серверы</h1>
+      <div class="bar-actions">
+        <button class="icon-btn" id="btn-test" title="Проверить задержку" aria-label="Проверить задержку">
+          <svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></svg>
+        </button>
+        <button class="icon-btn accent" id="btn-add" title="Добавить" aria-label="Добавить">
+          <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+      </div>
+    </header>
+    <div class="scroll" id="servers"></div>
+  </section>
+
+  <!-- Настройки -->
+  <section class="view hidden" id="v-settings">
+    <header class="bar">
+      <button class="icon-btn" data-go="home" aria-label="Назад"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg></button>
+      <h1>Настройки</h1>
+      <div class="bar-actions"></div>
+    </header>
+    <div class="scroll">
+      <div class="group desktop-only">
+        <div class="group-title">Режим работы</div>
+        <label class="row radio"><input type="radio" name="mode" value="tun">
+          <span class="grow"><span class="title">VPN</span><span class="muted small" id="tun-hint">Весь трафик компьютера идёт через сервер</span></span></label>
+        <label class="row radio"><input type="radio" name="mode" value="proxy">
+          <span class="grow"><span class="title">Системный прокси</span><span class="muted small">Браузеры и большинство программ, без прав администратора. Порт 10808</span></span></label>
+      </div>
+      <div class="group">
+        <label class="row"><span class="grow"><span class="title">Российские сайты напрямую</span>
+          <span class="muted small">Банки, Госуслуги и другие сайты в зоне .ru откроются без VPN</span></span>
+          <input type="checkbox" class="switch" id="opt-ru"></label>
+        <label class="row"><span class="grow"><span class="title">Подключаться при запуске</span></span>
+          <input type="checkbox" class="switch" id="opt-autoconnect"></label>
+        <label class="row desktop-only"><span class="grow"><span class="title">Запускать вместе с системой</span>
+          <span class="muted small">В свёрнутом виде, в области уведомлений</span></span>
+          <input type="checkbox" class="switch" id="opt-autostart"></label>
+      </div>
+      <div class="group">
+        <button class="row link" id="btn-log"><span class="grow title">Журнал подключения</span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button>
+        <button class="row link" id="btn-site"><span class="grow title">Страница программы на GitHub</span><svg viewBox="0 0 24 24" class="chev"><path d="m9 6 6 6-6 6"/></svg></button>
+        <button class="row link desktop-only" id="btn-quit"><span class="grow title bad">Выйти из программы</span></button>
+      </div>
+      <div class="about muted small" id="about"></div>
+    </div>
+  </section>
+
+  <div class="toast hidden" id="toast"></div>
+  <div class="modal hidden" id="modal"><div class="sheet" id="sheet"></div></div>
+  <input type="file" id="file" class="hidden" accept=".conf,.ovpn,.json,.txt,text/plain,application/json">
+
+  <script src="lib/links.js"></script>
+  <script src="lib/config.js"></script>
+  <script src="native.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

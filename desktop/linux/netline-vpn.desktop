@@ -1,0 +1,11 @@
+[Desktop Entry]
+Categories=Network;
+Comment=Простой и быстрый клиент VPN и прокси
+Comment[ru]=Простой и быстрый клиент VPN и прокси
+Exec={{exec}}
+StartupWMClass={{exec}}
+Icon={{icon}}
+Name=NetLine VPN
+Terminal=false
+Type=Application
+Keywords=vpn;proxy;vless;wireguard;openvpn;прокси;

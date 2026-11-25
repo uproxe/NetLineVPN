@@ -1,0 +1,73 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "NetLine VPN",
+  "mainBinaryName": "netline-vpn",
+  "identifier": "io.github.uproxe.netline",
+  "build": {
+    "frontendDist": "../ui"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "publisher": "uproxe",
+    "homepage": "https://github.com/uproxe/NetLineVPN",
+    "copyright": "© 2026 uproxe",
+    "license": "MIT",
+    "category": "Utility",
+    "shortDescription": "Простой и быстрый клиент VPN и прокси",
+    "longDescription": "NetLine VPN — лёгкий клиент VPN и прокси: VLESS (Reality, XHTTP), VMess, Trojan, Shadowsocks, Hysteria2, TUIC, WireGuard, OpenVPN, SOCKS5, HTTP и подписки. Включается одной кнопкой.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "externalBin": [
+      "binaries/netline-singbox",
+      "binaries/netline-xray"
+    ],
+    "resources": {
+      "resources/rules/geoip-ru.srs": "rules/geoip-ru.srs",
+      "resources/rules/geosite-category-ru.srs": "rules/geosite-category-ru.srs",
+      "resources/LICENSES.txt": "LICENSES.txt"
+    },
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      },
+      "nsis": {
+        "installMode": "perMachine",
+        "languages": ["Russian"],
+        "displayLanguageSelector": false,
+        "installerIcon": "icons/icon.ico",
+        "installerHooks": "windows/hooks.nsh",
+        "startMenuFolder": "NetLine VPN"
+      }
+    },
+    "linux": {
+      "deb": {
+        "depends": ["libcap2-bin"],
+        "section": "net",
+        "postInstallScript": "linux/postinst.sh"
+      },
+      "rpm": {
+        "postInstallScript": "linux/postinst.sh"
+      },
+      "appimage": {
+        "bundleMediaFramework": false
+      }
+    },
+    "macOS": {
+      "signingIdentity": "-",
+      "minimumSystemVersion": "10.15"
+    }
+  }
+}

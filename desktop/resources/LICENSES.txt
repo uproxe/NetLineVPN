@@ -1,0 +1,19 @@
+NetLine VPN — MIT License, © 2026 uproxe. https://github.com/uproxe/NetLineVPN
+
+В программу входят отдельные программы с открытым кодом, у каждой своя лицензия:
+
+sing-box — GPL-3.0-or-later
+  https://github.com/SagerNet/sing-box
+
+Xray-core — MPL-2.0
+  https://github.com/XTLS/Xray-core
+
+hev-socks5-tunnel (только Android) — MIT
+  https://github.com/heiher/hev-socks5-tunnel
+
+Списки сайтов и адресов России (geoip-ru, geosite-category-ru) — проекты
+  https://github.com/SagerNet/sing-geoip (GPL-3.0) и https://github.com/SagerNet/sing-geosite (GPL-3.0),
+  данные v2fly/domain-list-community (MIT) и MaxMind GeoLite2 (CC BY-SA 4.0).
+
+Исходный код этих программ доступен по ссылкам выше. NetLine VPN запускает их
+как отдельные процессы и не изменяет.

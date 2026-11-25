@@ -1,0 +1,20 @@
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+    plugins {
+        // версию передаёт сборка (последняя стабильная 9.x), иначе — эта
+        id "com.android.application" version providers.gradleProperty("agpVersion").getOrElse("9.1.0")
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+rootProject.name = "NetLineVPN"
+include ":app"

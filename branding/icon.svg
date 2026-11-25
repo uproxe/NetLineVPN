@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <rect width="256" height="256" rx="56" fill="#0B1220"/>
+  <!-- линия = защищённый канал между двумя узлами -->
+  <path d="M 68 128 H 188" stroke="#38BDF8" stroke-width="14" stroke-linecap="round" fill="none"/>
+  <!-- узлы -->
+  <g fill="#38BDF8">
+    <circle cx="68" cy="128" r="15"/>
+    <circle cx="188" cy="128" r="15"/>
+  </g>
+</svg>

@@ -1,0 +1,66 @@
+// NetLine VPN для Android: свой интерфейс (та же страница, что на компьютере) в WebView,
+// VpnService + hev-socks5-tunnel, ядра sing-box и Xray.
+plugins {
+    id "com.android.application"
+}
+
+def appVersion = providers.gradleProperty("appVersion").getOrElse(file("../../VERSION").text.trim())
+def parts = appVersion.tokenize(".").collect { it.toInteger() }
+def code = parts[0] * 10000 + parts[1] * 100 + parts[2]
+def cores = new Properties()
+file("../../cores.env").withInputStream { cores.load(it) }
+
+android {
+    namespace = "io.github.uproxe.netline"
+    compileSdk {
+        version = release(36) { minorApiLevel = 0 }
+    }
+
+    defaultConfig {
+        applicationId = "io.github.uproxe.netline"
+        minSdk = 26
+        targetSdk = 34
+        versionCode = code
+        versionName = appVersion
+        buildConfigField("String", "SING_BOX_VERSION", "\"${cores.getProperty('SING_BOX_VERSION')}\"")
+        buildConfigField("String", "XRAY_VERSION", "\"${cores.getProperty('XRAY_VERSION')}\"")
+        ndk { abiFilters.add(providers.gradleProperty("abi").getOrElse("arm64-v8a")) }
+    }
+
+    signingConfigs {
+        release {
+            def ks = System.getenv("NETLINE_KEYSTORE")
+            def pass = System.getenv("NETLINE_KEYSTORE_PASSWORD") ?: "netline-public"
+            storeFile = file(ks ?: "../signing/netline.jks")
+            storePassword = pass
+            keyAlias = System.getenv("NETLINE_KEY_ALIAS") ?: "netline"
+            keyPassword = System.getenv("NETLINE_KEY_PASSWORD") ?: pass
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled = false
+            signingConfig = signingConfigs.release
+        }
+    }
+
+    buildFeatures {
+        buildConfig = true
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    // ядра VPN — обычные программы под именем lib*.so: Android разрешает запускать их из папки библиотек
+    packaging {
+        jniLibs { useLegacyPackaging = true }
+    }
+
+    lint {
+        abortOnError = false
+        checkReleaseBuilds = false
+    }
+}

@@ -176,8 +176,8 @@ impl Proc {
 
     /// Мягкая остановка (до 5 секунд), потом принудительная
     pub fn stop(mut self) {
-        if let Some(f) = &self.stop_file {
-            let _ = File::create(f);
+        if let Some(f) = self.stop_file.clone() {
+            let _ = File::create(&f);
             let t = Instant::now();
             while t.elapsed() < Duration::from_secs(5) {
                 if !self.alive() {
@@ -185,7 +185,7 @@ impl Proc {
                 }
                 thread::sleep(Duration::from_millis(100));
             }
-            let _ = fs::remove_file(f);
+            let _ = fs::remove_file(&f);
         }
         if self.alive() {
             let _ = self.child.kill();
@@ -650,7 +650,7 @@ impl Core {
                 if i.gen != gen {
                     return;
                 }
-                i.procs.iter_mut().find(|p| !p.alive()).map(|p| p.name)
+                i.procs.iter_mut().find_map(|p| if p.alive() { None } else { Some(p.name) })
             };
             if let Some(name) = dead {
                 let tail = log_tail(&me.log, 30);

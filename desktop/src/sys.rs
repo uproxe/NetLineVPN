@@ -11,6 +11,7 @@ pub fn init(data_dir: PathBuf) {
     clear_system_proxy();
 }
 
+#[cfg_attr(not(windows), allow(dead_code))]
 fn data_dir() -> PathBuf {
     DATA_DIR.get().cloned().unwrap_or_else(std::env::temp_dir)
 }
